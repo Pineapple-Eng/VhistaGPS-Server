@@ -1,0 +1,4 @@
+before_install: cd functions
+language: node_js
+node_js:
+  - "node"
