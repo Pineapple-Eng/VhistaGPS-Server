@@ -36,7 +36,7 @@ exports.getNearbyPlacesLegacy = functions.https.onRequest((request, response) =>
       page = 0;
     }
 
-		var places = {}
+		var places = {};
     admin.database().ref().child('COL/BOGOTA/TRAFFICLIGHTS').limitToFirst(1).once('value', function (snapshotTF) {
         if (snapshotTF.val() !== undefined) {
 					for (var key in snapshotTF.val()) {
@@ -79,26 +79,6 @@ exports.getNearbyPlacesLegacy = functions.https.onRequest((request, response) =>
 																						places[key] = snapshotSC.val()[key];
 															      			}
 															    			}
-
-																				places["STOR-10"] = {
-																					latitude:4.762194091798653,
-																					longitude: -74.04640302593384,
-																					type: "Centro Comercial",
-																					address: "Avenida Carrera 45 # 185",
-																					name: "Centro Comercial SantaFe",
-																					pinType: "STORE",
-																					thumbnailURL: "https://firebasestorage.googleapis.com/v0/b/vhistaapp.appspot.com/o/Vhista-GPS%2FDefaults%2FPlacesTypes%2FStore%2Fstore-2.png?alt=media"
-																				}
-
-																				places["SEMA-R"] = {
-																					latitude:4.761370822815775,
-																					longitude: -74.04748663837586,
-																					type: "Semáforo no accesible",
-																					address: "Calle 183 # 50b",
-																					name: "Semáforo no accesible",
-																					pinType: "TRAFFICLIGHT",
-																					thumbnailURL: "https://firebasestorage.googleapis.com/v0/b/vhistaapp.appspot.com/o/Vhista-GPS%2FDefaults%2FPlacesTypes%2FSemaforo%2Ftraffic-light.png?alt=media"
-																				}
 
 															          response.status(200).send(places);
 															        } else {
@@ -168,15 +148,15 @@ function getPlacesForGooglePlaces(googleResults, latitude, longitude) {
 			continue;
 		}
 
-		var newPlace = {}
+		var newPlace = {};
 
 		newPlace.name = googlePlace.name;
 		newPlace.address = googlePlace.vicinity;
 		newPlace.latitude = googlePlace.geometry.location.lat;
 		newPlace.longitude = googlePlace.geometry.location.lng;
 		newPlace.type = googlePlace.types[0];
-		newPlace.pinType = getGooglePlacePinTypeAndThumbnail(googlePlace)["pinType"];
-		newPlace.thumbnailURL = getGooglePlacePinTypeAndThumbnail(googlePlace)["thumbnailURL"];
+		newPlace.pinType = getGooglePlacePinTypeAndThumbnail(googlePlace).pinType;
+		newPlace.thumbnailURL = getGooglePlacePinTypeAndThumbnail(googlePlace).thumbnailURL;
 
 		places[googlePlace.id] = newPlace;
 	}
@@ -430,7 +410,7 @@ function getDistanceFromLatLonInKm(lat1,lon1,lat2,lon2) {
 }
 
 function deg2rad(deg) {
-  return deg * (Math.PI/180)
+  return deg * (Math.PI/180);
 }
 
 
