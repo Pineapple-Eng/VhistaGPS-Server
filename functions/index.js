@@ -12,103 +12,6 @@ admin.initializeApp(functions.config().firebase);
 
 
 /* Begin Functions */
-
-//Get Nearby Places
-exports.getNearbyPlacesLegacy = functions.https.onRequest((request, response) => {
-
-  const latitude = request.body.latitude;
-  const longitude = request.body.longitude;
-  var limit = request.body.limit;
-  var page = request.body.limit;
-
-  cors(request, response, () => {
-
-    if (latitude === undefined || latitude === null) {
-      response.status(400).send("Latitude can't be null or undefined");
-    }
-    if (longitude === undefined || longitude === null) {
-      response.status(400).send("Longitude can't be null or undefined");
-    }
-    if (limit === undefined || limit === null) {
-      limit = 100;
-    }
-    if (page === undefined || page === null) {
-      page = 0;
-    }
-
-		var places = {};
-    admin.database().ref().child('COL/BOGOTA/TRAFFICLIGHTS').limitToFirst(1).once('value', function (snapshotTF) {
-        if (snapshotTF.val() !== undefined) {
-					for (var key in snapshotTF.val()) {
-      			if (snapshotTF.val().hasOwnProperty(key)) {
-							places[key] = snapshotTF.val()[key];
-      			}
-    			}
-					admin.database().ref().child('COL/BOGOTA/FOOD').limitToFirst(1).once('value', function (snapshotFD) {
-			        if (snapshotFD.val() !== undefined) {
-								for (var key in snapshotFD.val()) {
-			      			if (snapshotFD.val().hasOwnProperty(key)) {
-										places[key] = snapshotFD.val()[key];
-			      			}
-			    			}
-								admin.database().ref().child('COL/BOGOTA/CULTURE').limitToFirst(1).once('value', function (snapshotCT) {
-						        if (snapshotCT.val() !== undefined) {
-											for (var key in snapshotCT.val()) {
-						      			if (snapshotCT.val().hasOwnProperty(key)) {
-													places[key] = snapshotCT.val()[key];
-						      			}
-						    			}
-											admin.database().ref().child('COL/BOGOTA/HEALTH').limitToFirst(1).once('value', function (snapshotHT) {
-									        if (snapshotHT.val() !== undefined) {
-														for (var key in snapshotHT.val()) {
-									      			if (snapshotHT.val().hasOwnProperty(key)) {
-																places[key] = snapshotHT.val()[key];
-									      			}
-									    			}
-														admin.database().ref().child('COL/BOGOTA/STORE').limitToFirst(1).once('value', function (snapshotST) {
-												        if (snapshotST.val() !== undefined) {
-																	for (var key in snapshotST.val()) {
-												      			if (snapshotST.val().hasOwnProperty(key)) {
-																			places[key] = snapshotST.val()[key];
-												      			}
-												    			}
-																	admin.database().ref().child('COL/BOGOTA/SECURITY').limitToFirst(1).once('value', function (snapshotSC) {
-															        if (snapshotSC.val() !== undefined) {
-																				for (var key in snapshotSC.val()) {
-															      			if (snapshotSC.val().hasOwnProperty(key)) {
-																						places[key] = snapshotSC.val()[key];
-															      			}
-															    			}
-
-															          response.status(200).send(places);
-															        } else {
-															          response.status(400).send("Places not found");
-															        }
-															    });
-												        } else {
-												          response.status(400).send("Places not found");
-												        }
-												    });
-									        } else {
-									          response.status(400).send("Places not found");
-									        }
-									    });
-						        } else {
-						          response.status(400).send("Places not found");
-						        }
-						    });
-			        } else {
-			          response.status(400).send("Places not found");
-			        }
-			    });
-        } else {
-          response.status(400).send("Places not found");
-        }
-    });
-  });
-
-});
-
 exports.getNearbyPlaces = functions.https.onRequest((request, response) => {
 
   const latitude = request.body.latitude;
@@ -128,7 +31,9 @@ exports.getNearbyPlaces = functions.https.onRequest((request, response) => {
       radius: 150
     }, function(err, responseGoogle) {
   		if (!err) {
-    		response.status(200).send(getPlacesForGooglePlaces(responseGoogle.json.results, latitude, longitude));
+				getPlacesForGooglePlaces(responseGoogle.json.results, latitude, longitude, function(places) {
+					response.status(200).send(places);
+				});
   		} else {
 				response.status(500).send(err);
 			}
@@ -138,10 +43,13 @@ exports.getNearbyPlaces = functions.https.onRequest((request, response) => {
 });
 
 
-function getPlacesForGooglePlaces(googleResults, latitude, longitude) {
+function getPlacesForGooglePlaces(googleResults, latitude, longitude, callback) {
 
 	var places  = {};
+	var placesIds = [];
+	var placesCoordinates = [];
 
+	var index = 0;
 	for (let googlePlace of googleResults) {
 
 		if (getDistanceFromLatLonInKm(latitude, longitude,googlePlace.geometry.location.lat, googlePlace.geometry.location.lng) > 0.15) {
@@ -157,12 +65,44 @@ function getPlacesForGooglePlaces(googleResults, latitude, longitude) {
 		newPlace.type = googlePlace.types[0];
 		newPlace.pinType = getGooglePlacePinTypeAndThumbnail(googlePlace).pinType;
 		newPlace.thumbnailURL = getGooglePlacePinTypeAndThumbnail(googlePlace).thumbnailURL;
+		newPlace.serverIndex = index;
 
 		places[googlePlace.id] = newPlace;
+
+		placesIds.push(googlePlace.id);
+		placesCoordinates.push({
+    	lat: googlePlace.geometry.location.lat,
+    	lng: googlePlace.geometry.location.lng
+  	});
+		index++;
 	}
 
-	return places;
+	getAltitudeForLatLongCoordinates(placesCoordinates, function(resultAltitudes) {
+		if (resultAltitudes !== undefined) {
 
+			for (placeKey in places) {
+				if (places.hasOwnProperty(placeKey)) {
+					places[placeKey].elevation = resultAltitudes[places[placeKey].serverIndex]["elevation"];
+				}
+			}
+			
+			console.log("Proccesed Places", places);
+			callback(places);
+		}
+	});
+}
+
+function getAltitudeForLatLongCoordinates(locations, callback) {
+	googleMapsClient.elevation({
+      locations: locations
+    }, (err, response) => {
+      if (err) {
+				console.log("Got ElevationAPI Error", err);
+				callback(undefined);
+			} else {
+				callback(response.json.results);
+			}
+  });
 }
 
 function getGooglePlacePinTypeAndThumbnail(googlePlace) {
@@ -310,65 +250,6 @@ function getGooglePlacePinTypeAndThumbnail(googlePlace) {
 	return result;
 }
 
-//Add new Place to Database
-exports.addPlace = functions.https.onRequest((request, response) => {
-
-  const idToken = request.body.idToken;
-
-  const name = request.body.name;
-  const type = request.body.type;
-  const latitude = request.body.latitude;
-  const longitude = request.body.longitude;
-  const thumbnailURL = request.body.thumbnailURL;
-
-  cors(request, response, () => {
-
-    // if (idToken === undefined || idToken === null) {
-    //   response.status(400).send("Token can't be null or undefined");
-    // }
-
-    // admin.auth().verifyIdToken(idToken).then(function (decodedToken) {
-      // var uid = decodedToken.uid;
-      // if (uid.localeCompare(functions.config().admin.uid) === 0) {
-
-        if (name === undefined || name === null) {
-          response.status(400).send("Name can't be null or undefined");
-        }
-        if (type === undefined || type === null) {
-          response.status(400).send("Type can't be null or undefined");
-        }
-        if (latitude === undefined || latitude === null) {
-          response.status(400).send("Latitude can't be null or undefined");
-        }
-        if (longitude === undefined || longitude === null) {
-          response.status(400).send("Longitude can't be null or undefined");
-        }
-        if (thumbnailURL === undefined || thumbnailURL === null) {
-          response.status(400).send("Thumbnail URL can't be null or undefined");
-        }
-
-        admin.database().ref("places").push().set({
-          name: name,
-          latitude: latitude,
-          longitude: longitude,
-          thumbnailURL: thumbnailURL
-        }).then(function (snapshot) {
-          response.status(200).send("Place Created");
-        });
-
-      // } else {
-      //   response.status(401).send("Unauthorized");
-      // }
-
-    // }).catch(function (error) {
-    //   console.log(error);
-    //   response.status(401).send("Unauthorized: Invalid Token");
-    // });
-
-  });
-
-});
-
 //Get Current Security Level for Location
 exports.getCurrentLocationSecurity = functions.https.onRequest((request, response) => {
 
@@ -383,11 +264,9 @@ exports.getCurrentLocationSecurity = functions.https.onRequest((request, respons
     if (longitude === undefined || longitude === null) {
       response.status(400).send("Longitude can't be null or undefined");
     }
-
     const jsonSecurityDetail = {
       dangerLevel:"No Peligroso"
     };
-
     response.status(200).send(jsonSecurityDetail);
 
   });
@@ -412,8 +291,5 @@ function getDistanceFromLatLonInKm(lat1,lon1,lat2,lon2) {
 function deg2rad(deg) {
   return deg * (Math.PI/180);
 }
-
-
-
 
 /* End Functions */
