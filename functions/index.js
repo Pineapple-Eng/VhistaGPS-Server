@@ -80,12 +80,12 @@ function getPlacesForGooglePlaces(googleResults, latitude, longitude, callback) 
 	getAltitudeForLatLongCoordinates(placesCoordinates, function(resultAltitudes) {
 		if (resultAltitudes !== undefined) {
 
-			for (placeKey in places) {
+			for (let placeKey in places) {
 				if (places.hasOwnProperty(placeKey)) {
-					places[placeKey].elevation = resultAltitudes[places[placeKey].serverIndex]["elevation"];
+					places[placeKey].elevation = resultAltitudes[places[placeKey].serverIndex].elevation;
 				}
 			}
-			
+
 			console.log("Proccesed Places", places);
 			callback(places);
 		}
